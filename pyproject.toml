@@ -1,0 +1,12 @@
+[project]
+name = "backengine"
+version = "0.1.0"
+description = "Trading strategy backtest engine for BTC and EURUSD"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "pandas>=1.5.0",
+    "numpy>=1.23.0",
+    "yfinance>=0.2.0",
+    "ccxt>=4.5.26",
+]
