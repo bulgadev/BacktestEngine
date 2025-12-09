@@ -317,7 +317,7 @@ class BacktestEngine:
         Returns:
             Position quantity
         """
-        # Use 100% of capital (can be adjusted)
+        #the position size
         position_value = self.current_capital * 0.99  # Leave 1% buffer
         quantity = position_value / price
         return quantity

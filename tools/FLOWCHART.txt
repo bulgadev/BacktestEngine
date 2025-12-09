@@ -1,0 +1,176 @@
+
+             TRADING STRATEGY OVERFITTING & ROBUSTNESS ANALYSIS             ║
+                         Complete Analysis Pipeline                         ║
+
+                                    START
+                                     │
+                                     ▼
+                        ┌────
+                        │   Run Initial Backtest │
+                        │   (BacktestEngine)     │
+                        └────────────────────────┘
+                                     │
+                    ┌────────────────┴────
+                    │                                 │
+                    ▼                                 ▼
+        ┌──────────────────────┐        ┌──────────────────────┐
+        │  OVERFITTING CHECK   │        │  ROBUSTNESS TESTS    │
+        │ (In-Sample vs Out)   │        │  (Statistical Edge)  │
+        └──────────────────────┘        └──────────────────────
+                    │                                 │
+        ┌───────────┴───────────┐      ┌──────────────┴──────────────┐
+        │                       │      │                             │
+        ▼                       ▼      ▼                             ▼
+   ┌─────────────┐      ┌──────────────┐      ┌──────────────┐  ┌─────────────┐
+   │Walk-Forward │      │  Parameter   │      │Monte Carlo   │  │Monte Carlo  │
+   │  Analysis   │      │ Sensitivity  │      │ Trade Shuffle│  │   Bootstrap │
+   │             │      │              │      │              │  │             │
+   │ • In-sample │      │ • CV Score   │      │ • P-Value    │  │ • Conf Int  │
+   │ • Out-sample│      │ • Robustness │      │ • Edge Test  │  │ • Risk Range│
+   │ • Degradation      │ • Parameter  │      │ • Luck vs    │  │ • Expected  │
+   │              │      │   Heatmap    │      Skill      Returns   ││      │  
+   └──────┬───────┘      └──────┬───────┘      └──────┬───────┘  └────┬────────┘
+          │                     │                     │               │
+          └─────────────────────┴─────────────────────┴───────────────┘
+                                │
+                                ▼
+                    ┌──────────────────────┐
+                    │ Visualize All Results│
+                    │                      │
+                    │ • Distributions      │
+                    │ • CDFs               │
+                    │ • Q-Q Plots          │
+                    │ • Comparison Charts  │
+                    │ • Summary Dashboard  │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │ Generate Final Report│
+                    │                      │
+                    │ • Overfitting Score  │
+                    │ • Risk Level         │
+                    │ • Recommendations    │
+                    │ • Tradeable? (Y/N)   │
+                    └──────────┬───────────┘
+                               │
+                    ┌──────────┴──────────┐
+                    │                     │
+                   YES                   NO
+                    │                     │
+                    ▼                     ▼
+  ┌────────────────────┐        ┌──────
+        │  READY TO TRADE    │  │  REDESIGN NEEDED   │
+        │                    │  │                    │
+        │ • Use risk mgmt    │  │ • Simplify logic   │
+        │ • Paper trade 1st  │  │ • More data        │
+        │ • Monitor live     │  │ • Different params │
+        │ • Stay humble      │  │ • New approach     │
+  └────────────────────┘        └─────
+                    │                     │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                              END
+
+
+                          KEY DECISION METRICS                              ║
+
+                          Overfitting Score
+                          ═════════════════
+                          
+ 100    0 ═══════════════════════════════════════════════════
+    │                                                                   │
+    └─ 30-60 0-30 60-80 ──────────── 80-100 ─────────── ──────
+      LOW RISK        MODERATE RISK          HIGH RISK           SEVERE
+      ✓ TRADE          ⚠️ INVESTIGATE         ✗ REDESIGN          ✗✗ AVOID
+
+
+                        Walk-Forward Degradation
+                        ════════════════════════
+                        
+    0% ───────────── 10% ───────────── 30% ───────────── 50% ─────── 100%+
+    │                │                 │                 │            │
+    EXCELLENT       GOOD             MODERATE           POOR         SEVERE
+    ✓ Accept        ✓ Accept         ⚠️ Caution         ✗ Reject     ✗✗ Reject
+
+
+                         Monte Carlo P-Value
+                         ═══════════════════
+                         
+    0.05 0.00 0.20 ──────────────── 1.00 ────────────── ────────
+    │                   │                       │                      │
+    SIGNIFICANT      THRESHOLD               MARGINAL            NOT SIGNIFICANT
+    ✓ STAT SIG       ✓ ACCEPT               ⚠️ INVESTIGATE       ✗ REJECT
+
+
+                    Parameter Sensitivity (Coeff. of Var)
+                    ═════════════════════════════════════
+                    
+    0.0 ──────────── 0.3 ──────────── 0.5 ──────────── 1.0 ─────────── 2.0+
+    │               │               │               │                │
+    PERFECT        VERY ROBUST    ROBUST         SENSITIVE          OVERFITTED
+    ✓ Accept       ✓ Accept       ✓ Accept       ⚠️ Caution         ✗ Reject
+
+
+
+                     FINAL TRADING DECISION MATRIX                          ║
+
+Overfitting    │  MC P-Value   │  Parameter CV  │  Walk-Forward  │  DECISION
+Score          │               │                │  Degradation   │
+            {                 echo ___BEGIN___COMMAND_OUTPUT_MARKER___;                 PS1="";PS2="";unset HISTFILE;                 EC=$?;                 echo "___BEGIN___COMMAND_DONE_MARKER___$EC";             }
+< 30           │  < 0.05       │  < 0.3        │  < 10%         │  ✓✓ TRADE
+30-40          │  < 0.05       │  < 0.5        │  < 20%         │  ✓ TRADE
+40-50          │  < 0.10       │  < 0.7        │  < 30%         │  ✓ TRADE*
+50-60          │  < 0.20       │  < 1.0        │  < 50%         │  ⚠️  CAUTION
+60-80          │  > 0.20       │  > 1.0        │  > 50%         │  ✗ REDESIGN
+> 80           │  > 0.50       │  > 2.0        │  > 70%         │  ✗✗ AVOID
+
+* Requires paper trading first and smaller position sizes
+
+
+                          OUTPUT FILES GENERATED                            ║
+
+When you run the analysis, you'll get these visualizations:
+
+1. monte_carlo_trade_shuffle.png
+   ├─ Histogram of shuffled trade results
+   ├─ Actual performance vs random distribution
+   └─ Statistical significance marked
+
+2. monte_carlo_shuffle_cdf.png
+   ├─ Cumulative distribution function
+   ├─ Probability of achieving each return
+   └─ Percentile analysis
+
+3. monte_carlo_bootstrap.png
+   ├─ Distribution of resampled equity curves
+   ├─ 5th-95th percentile confidence intervals
+   └─ Risk/reward assessment
+
+4. monte_carlo_qq_plot.png
+   ├─ Q-Q plot vs normal distribution
+   ├─ Tests for fat tails
+   └─ Tail risk assessment
+
+5. monte_carlo_summary.png
+   ├─ All methods in one view
+   ├─ Comparison table
+   └─ Quick reference dashboard
+
+
+                              QUICK USAGE GUIDE                            ║
+
+Command:  python tools/example_analysis.py
+
+This runs the complete pipeline and generates all visualizations and metrics.
+
+Then check:
+  1. Console output for metrics and recommendations
+  2. tools/plots/ directory for visualizations
+  3. Use decision matrix above to decide if strategy is tradeable
+
+
+
+                  🎯 Ready to analyze your strategies! 🎯
+
