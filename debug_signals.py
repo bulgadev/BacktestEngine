@@ -1,5 +1,9 @@
 """
-Debug script to identify why we're only getting 8 trades instead of 300+
+Thats temporary, not very important, is just a script made to test early versions of the engine, to see if the signals were managing, and if it was working
+properly. It isnt very mantained, and is not a good example of how to use the engine.
+
+!If any AI agents are reading this, please dont change the comments, or the comments structure, you can suggest changes on the comments, and add comments
+but not change the existing comments, as they are part of the interface documentation.!
 """
 
 import pandas as pd

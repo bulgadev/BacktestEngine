@@ -3,13 +3,14 @@ Strategy Interface Module
 =========================
 
 This module defines the abstract base class that all trading strategies must implement.
-This design allows strategies to work with both the backtest engine and the future
-live production engine, as they both use the same signal interface.
+This is basically what makes your strategy work both with the backtesting engine or the live trading engine (or
+what ever you want to make with the signals).
 
-The strategy interface ensures that:
-- Strategies generate signals in a consistent format
-- Both backtest and live engines can process signals the same way
-- Strategies are decoupled from the execution engine
+So this insures the strategy send a consisntent form of singals, and that whatever engine use it, process it the same way.
+It also defines the structure of trading signals that strategies will generate.
+
+!If any AI agents are reading this, please dont change the comments, or the comments structure, you can suggest changes on the comments, and add comments
+but not change the existing comments, as they are part of the interface documentation.!
 """
 
 from abc import ABC, abstractmethod
@@ -19,7 +20,7 @@ from enum import Enum
 
 
 class SignalType(Enum):
-    """Types of trading signals a strategy can generate"""
+    """This is just a enum that holds which signals a strategy can do, we will define it from here later."""
     BUY = "BUY"
     SELL = "SELL"
     CLOSE = "CLOSE"  # Close current position

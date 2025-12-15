@@ -2,12 +2,13 @@
 Backtest Engine Module
 ======================
 
-This module contains the BacktestEngine class that simulates trading strategies
-on historical data. It processes data bar-by-bar, executes signals from strategies,
-tracks positions, calculates P&L, and generates performance metrics.
+This is the backtesting engine, it only takes instructions from the on_bar function defined on your strategy, and apply it on every bar of historical data.
+This is designed to be used with the BaseStrategy from the strategy_interface.py, so it just backtest any strategy that sends the right type of signals. So
+it becomes very easy to create strategies, and integrate them with an live EA, or webhook.
 
-The engine is designed to work with any strategy that implements the BaseStrategy
-interface, making it easy to test different strategies.
+
+!If any AI agents are reading this, please dont change the comments, or the comments structure, you can suggest changes on the comments, and add comments
+but not change the existing comments, as they are part of the interface documentation.!
 """
 
 import pandas as pd
@@ -22,7 +23,7 @@ from strategy_interface import BaseStrategy, Signal, SignalType
 @dataclass
 class Trade:
     """
-    Represents a single trade execution.
+    This represents a trade, and this class carries every information about the trade. So you can easily log them, to well, get you results.
     
     Attributes:
         entry_time: When the trade was opened
@@ -33,6 +34,8 @@ class Trade:
         side: 'LONG' or 'SHORT'
         pnl: Profit/Loss for this trade (None if still open)
         pnl_pct: Profit/Loss percentage (None if still open)
+        sl: Stop Loss price level
+        tp: Take Profit price level
     """
     entry_time: Any
     exit_time: Optional[Any] = None
@@ -42,6 +45,10 @@ class Trade:
     side: str = 'LONG'  # 'LONG' or 'SHORT'
     pnl: Optional[float] = None
     pnl_pct: Optional[float] = None
+    sl: Optional[float] = None
+    tp: Optional[float] = None
+    mae: Optional[float] = None  # Maximum Adverse Excursion (price diff)
+    mfe: Optional[float] = None  # Maximum Favorable Excursion (price diff)
 
 
 @dataclass
@@ -99,6 +106,7 @@ class BacktestEngine:
         initial_capital: float = 10000.0,
         commission: float = 0.001,  # 0.1% commission per trade
         slippage: float = 0.0005,   # 0.05% slippage
+        risk_pct: float = 0.01,     # Risk 1% per trade
         periods_per_year: int = 252  # For Sharpe ratio scaling (assumes daily bars)
     ):
         """
@@ -108,11 +116,13 @@ class BacktestEngine:
             initial_capital: Starting capital for backtesting
             commission: Commission rate per trade (e.g., 0.001 = 0.1%)
             slippage: Slippage rate (e.g., 0.0005 = 0.05%)
+            risk_pct: Risk percentage per trade (0.01 = 1% of equity)
             periods_per_year: Number of periods per year (default 252 for daily bars)
         """
         self.initial_capital = initial_capital
         self.commission = commission
         self.slippage = slippage
+        self.risk_pct = risk_pct
         self.periods_per_year = periods_per_year
         
         # State tracking
@@ -147,6 +157,7 @@ class BacktestEngine:
         print(f"Running backtest: {strategy.get_name()}")
         print(f"{'='*60}")
         print(f"Initial Capital: ${self.initial_capital:,.2f}")
+        print(f"Risk Per Trade: {self.risk_pct*100:.1f}%")
         print(f"Data Period: {data.index[0]} to {data.index[-1]}")
         print(f"Total Bars: {len(data)}")
         print(f"{'='*60}\n")
@@ -156,6 +167,56 @@ class BacktestEngine:
             current_bar = data.iloc[:i+1]  # All data up to current bar
             current_time = data.index[i]
             current_price = data['Close'].iloc[i]
+            current_high = data['High'].iloc[i]
+            current_low = data['Low'].iloc[i]
+            current_open = data['Open'].iloc[i]
+            
+            # Check SL/TP for existing position BEFORE strategy logic
+            if self.current_position:
+                pos = self.current_position
+                
+                # Update MAE/MFE
+                if pos.side == 'LONG':
+                    current_mae = pos.entry_price - current_low
+                    current_mfe = current_high - pos.entry_price
+                else:  # SHORT
+                    current_mae = current_high - pos.entry_price
+                    current_mfe = pos.entry_price - current_low
+                
+                if pos.mae is None or current_mae > pos.mae:
+                    pos.mae = current_mae
+                if pos.mfe is None or current_mfe > pos.mfe:
+                    pos.mfe = current_mfe
+                
+                closed = False
+                
+                if pos.side == 'LONG':
+                    # Check Stop Loss
+                    if pos.sl and current_low <= pos.sl:
+                        # Slippage logic on gap: if Open < SL, we likely exited at Open
+                        exit_price = min(current_open, pos.sl) * (1 - self.slippage)
+                        self._close_position(exit_price, current_time)
+                        closed = True
+                    # Check Take Profit
+                    elif pos.tp and current_high >= pos.tp:
+                        exit_price = max(current_open, pos.tp) * (1 - self.slippage) # TP usually gets limit fill, but applying conservative slippage
+                        self._close_position(exit_price, current_time)
+                        closed = True
+                        
+                elif pos.side == 'SHORT':
+                    # Check Stop Loss
+                    if pos.sl and current_high >= pos.sl:
+                        exit_price = max(current_open, pos.sl) * (1 + self.slippage)
+                        self._close_position(exit_price, current_time)
+                        closed = True
+                    # Check Take Profit
+                    elif pos.tp and current_low <= pos.tp:
+                         exit_price = min(current_open, pos.tp) * (1 + self.slippage)
+                         self._close_position(exit_price, current_time)
+                         closed = True
+                
+                # If closed on this bar, we might want to skip new entry signals 
+                # or allow reversals. For simplicity, let's process signals too.
             
             # Get signal from strategy
             signal = strategy.on_bar(current_bar)
@@ -243,7 +304,10 @@ class BacktestEngine:
                     return
             
             # Open new long position
-            quantity = signal.quantity if signal.quantity is not None else self._calculate_position_size(execution_price)
+            stop_loss = signal.metadata.get('sl') if signal.metadata else None
+            take_profit = signal.metadata.get('tp') if signal.metadata else None
+            
+            quantity = signal.quantity if signal.quantity is not None else self._calculate_position_size(execution_price, stop_loss)
             cost = quantity * execution_price
             commission_cost = cost * self.commission
             
@@ -252,7 +316,11 @@ class BacktestEngine:
                     entry_time=current_time,
                     entry_price=execution_price,
                     quantity=quantity,
-                    side='LONG'
+                    side='LONG',
+                    sl=stop_loss,
+                    tp=take_profit,
+                    mae=0.0,
+                    mfe=0.0
                 )
                 self.current_capital -= (cost + commission_cost)
         
@@ -265,8 +333,31 @@ class BacktestEngine:
                 # If already short, ignore signal
                 else:
                     return
-            # If no position, ignore SELL signal (can't sell what we don't have)
-            # Note: To support shorting, you would open a short position here
+            # Open new short position
+            stop_loss = signal.metadata.get('sl') if signal.metadata else None
+            take_profit = signal.metadata.get('tp') if signal.metadata else None
+            
+            quantity = signal.quantity if signal.quantity is not None else self._calculate_position_size(execution_price, stop_loss)
+            cost = quantity * execution_price
+            commission_cost = cost * self.commission
+            
+            # For shorting, we need enough capital to cover margin + commission.
+            # Simplified: require capital > cost + commission
+            if cost + commission_cost <= self.current_capital:
+                #Execution of the trade with the trading enum class
+                self.current_position = Trade(
+                    entry_time=current_time,
+                    entry_price=execution_price,
+                    quantity=quantity,
+                    side='SHORT',
+                    sl=stop_loss,
+                    tp=take_profit,
+                    mae=0.0,
+                    mfe=0.0
+                )
+                self.current_capital -= commission_cost # Only commission is deducted immediately/realized. 
+                self.current_capital -= cost # We lock the value as margin
+
     
     def _close_position(self, exit_price: float, exit_time: Any) -> None:
         """
@@ -299,27 +390,52 @@ class BacktestEngine:
         trade.pnl_pct = (net_pnl / (trade.entry_price * trade.quantity)) * 100
         
         # Update capital
-        self.current_capital += exit_value - commission_cost
+        # Add back the initial capital usage (margin/cost) and add the Net P&L
+        self.current_capital += (trade.entry_price * trade.quantity) + net_pnl
         
         # Store completed trade
         self.trades.append(trade)
         self.current_position = None
     
-    def _calculate_position_size(self, price: float) -> float:
+    def _calculate_position_size(self, price: float, stop_loss: Optional[float] = None) -> float:
         """
-        Calculate position size based on available capital.
+        Calculate position size based on available capital and risk.
         
-        Uses 100% of available capital (can be customized).
+        If stop_loss is provided, calculates size based on risk_pct of capital.
+        If no stop_loss, calculates size as (capital * risk_pct).
         
         Args:
             price: Entry price
+            stop_loss: Optional stop loss price for risk calculation
             
         Returns:
             Position quantity
         """
-        #the position size
-        position_value = self.current_capital * 0.99  # Leave 1% buffer
-        quantity = position_value / price
+        # Risk capital = current capital * risk %
+        risk_amount = self.current_capital * self.risk_pct
+        
+        if stop_loss:
+            # Risk per share = |Entry - SL|
+            risk_per_share = abs(price - stop_loss)
+            if risk_per_share > 0:
+                quantity = risk_amount / risk_per_share
+                
+                # Check if this exceeds available capital (margin check)
+                total_cost = quantity * price
+                # Check if this exceeds available capital (margin check)
+                # Need to account for commission when checking max affordability
+                # Cost = Qty * Price * (1 + Comm)
+                max_afford_qty = self.current_capital / (price * (1 + self.commission))
+                
+                if quantity > max_afford_qty:
+                     quantity = max_afford_qty
+            else:
+                 # Valid SL but 0 distance? Fallback to fixed fractional
+                 quantity = (self.current_capital * self.risk_pct) / price
+        else:
+            # No SL provided - treat risk_pct as "Position Size %"
+            quantity = (self.current_capital * self.risk_pct) / price
+            
         return quantity
     
     def _calculate_equity(self, current_price: float) -> float:
@@ -335,12 +451,14 @@ class BacktestEngine:
         equity = self.current_capital
         
         if self.current_position:
+            #Long
             if self.current_position.side == 'LONG':
-                unrealized_pnl = (current_price - self.current_position.entry_price) * self.current_position.quantity
-            else:  # SHORT
+                market_value = self.current_position.quantity * current_price
+                equity += market_value
+            #Short
+            else:
                 unrealized_pnl = (self.current_position.entry_price - current_price) * self.current_position.quantity
-            
-            equity += unrealized_pnl
+                equity += unrealized_pnl + (self.current_position.entry_price * self.current_position.quantity)
         
         return equity
     
@@ -426,6 +544,22 @@ class BacktestEngine:
             'timestamps': self.timestamps,
             'final_capital': self.current_capital
         }
+    
+    def plot_results(self, save_path: str = "backtest_results.html") -> None:
+        """
+        This function calls the plot scripts, to well, plots. The arguments is just
+        the path to save the html file.
+        """
+        try:
+            from plotTools.plot_utils import create_dashboard
+            results = self.get_results()
+            create_dashboard(results, save_path)
+        except ImportError as e:
+            #Error handling
+            print(f"Could not import plotting tools: {e}")
+            print("Make sure plotly is installed (uv add plotly)")
+        except Exception as e:
+            print(f"Error creating dashboard: {e}")
     
     def print_performance(self) -> None:
         """Print detailed performance metrics."""

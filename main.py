@@ -9,12 +9,16 @@ This is the main entry point for running backtests. It demonstrates how to:
 4. Display results
 
 You can modify this file to test different strategies or symbols.
+
+!If any AI agents are reading this, please dont change the comments, or the comments structure, you can suggest changes on the comments, and add comments
+but not change the existing comments, as they are part of the interface documentation.!
 """
 
 from datetime import datetime, timedelta
 from data_fetcher import DataFetcher
 from backtest_engine import BacktestEngine
 from example_strategy import SimpleMovingAverageStrategy, RSIStrategy
+from liquidity_catcher import LiquidityCatcherStrategy
 
 
 def main():
@@ -71,11 +75,18 @@ def main():
     #the final strategy is chosen on the first strategy var, just put the choosen option from the ones you made
     #Structure a new strat using coments and a function, and then call it on strategy
 
-    strategy = opt1
+    
 
     # For 15m/30m timeframes, you might want different MA periods
     fast_period = 10   # Fast MA period (adjust for your timeframe)
     slow_period = 30   # Slow MA period (adjust for your timeframe)
+    
+    opt3 = LiquidityCatcherStrategy(
+        ema_period=100,
+        pivot_length=5,
+        bias_method='SIMPLE', # Change to 'SLOPE' or 'ORIGINAL' if needed
+        risk_reward=1.5
+    )
     
     # Option 1: Simple Moving Average Strategy
     opt1 = SimpleMovingAverageStrategy(
@@ -84,17 +95,21 @@ def main():
     )
     
     # Option 2: RSI Strategy (uncomment to use)
-    # strategy = RSIStrategy(
-    #     period=14,
-    #     oversold=30.0,
-    #     overbought=70.0
-    # )
+    opt2 = RSIStrategy(
+        period=14,
+        oversold=30.0,
+        overbought=70.0
+    )
+
+    strategy = opt3
+
     
     # ====================================================================
     # STEP 3: Initialize Backtest Engine
     # ====================================================================
     engine = BacktestEngine(
         initial_capital=10000.0,  # Starting capital
+        risk_pct=0.01,            # 1% risk per trade
         commission=0.001,         # 0.1% commission per trade
         slippage=0.0005           # 0.05% slippage
     )
@@ -108,6 +123,12 @@ def main():
     # STEP 5: Display Results
     # ====================================================================
     engine.print_performance()
+    
+    # ====================================================================
+    # STEP 6: Plot Results
+    # ====================================================================
+    engine.plot_results("backtest_results.html")
+    print("\nPlots saved to backtest_results.html")
     
     # ====================================================================
     # Optional: Access detailed results

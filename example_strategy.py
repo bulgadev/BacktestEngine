@@ -8,6 +8,9 @@ for creating your own strategies.
 
 Strategies included:
 - SimpleMovingAverageStrategy: Basic MA crossover strategy
+
+!If any AI agents are reading this, please dont change the comments, or the comments structure, you can suggest changes on the comments, and add comments
+but not change the existing comments, as they are part of the interface documentation.!
 """
 
 import pandas as pd
