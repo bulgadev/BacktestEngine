@@ -63,30 +63,88 @@ class LiquidityCatcherStrategy(BaseStrategy):
         Initialize strategy parameters.
         
         Args:
-            ema_period: Period for EMA Trend Bias (default: 50)
-            pivot_length: Lookback/Lookforward for swing detection (default: 5)
-            risk_reward: Minimum Risk:Reward ratio (default: 2.0)
-            bias_method: 'ORIGINAL', 'SIMPLE', 'SLOPE' (default: 'SIMPLE')
-            sl_atr_multiplier: Multiplier for ATR based stop loss (default: 1.5)
+            pivot_length (int): Lookback for swing detection (InpPivotLength). Default: 14
+            ema_period (int): Period for EMA Bias (InpEMAPeriod). Default: 200
+            risk_percent (float): Risk % per trade (InpRiskPercent). Default: 0.5
+            max_risk_usd (float): Max $ risk per trade (InpMaxRiskPerTradeUSD). Default: 100.0
+            sl_mode (str): 'ATR' or 'SWING' (InpSLMode). Default: 'ATR'
+            atr_period (int): ATR period (InpATRPeriod). Default: 14
+            sl_atr_multiplier (float): ATR multiplier (InpATRMul). Default: 1.2
+            swing_buffer_pips (float): Buffer pips for swing SL (InpSwingBufferPips). Default: 5.0
+            fallback_sl_pips (int): Fallback SL in pips (InpStopLossPips). Default: 50
+            min_risk_reward (float): Minimum Risk:Reward (InpMinRiskReward). Default: 1.5
+            fallback_tp_pips (int): Fallback TP in pips (InpTPPips). Default: 100
+            use_breakeven (bool): Move to BE (InpUseBreakeven). Default: True
+            breakeven_trigger_pct (float): % of TP to trigger BE (InpBreakevenPercent). Default: 50.0
+            breakeven_plus_pips (int): Pips to add to BE (InpBreakevenPlusPips). Default: 2
+            partial_close_pct (float): % to close (InpPartialClosePercent). Default: 50.0
+            min_pivots_for_bos (int): Min pivots to confirm structure (InpMinPivotsForBOS). Default: 3
+            bos_confirmation_bars (int): Bars to confirm BOS (InpBOSConfirmationBars). Default: 3
+            require_higher_low (bool): Require HL for Buy (InpRequireHigherLow). Default: True
+            min_bos_break_pips (float): Min pips break for BOS (InpMinBOSBreakPips). Default: 5.0
+            min_bars_between_trades (int): Min bars delay (InpMinBarsBetweenTrades). Default: 5
+            max_daily_trades (int): Max trades/day (InpMaxDailyTrades). Default: 3
+            max_spread_pips (float): Max spread (InpMaxSpreadPips). Default: 2.5
+            enable_prints (bool): Debug prints (InpEnablePrints). Default: True
+            magic_number (int): Unique ID (InpMagicNumber). Default: 789456
+            trade_comment (str): Trade comment (InpTradeComment). Default: "BOS_Entry"
+            pip_value (float): Value of one pip. Default: 0.0001
         """
         # Combine defaults from __init__ with any arguments passed directly to initialize
         params = {**self.default_params, **kwargs}
         
-        self.ema_period = params.get('ema_period', 50)
-        self.pivot_length = params.get('pivot_length', 5)
-        self.min_risk_reward = params.get('risk_reward', 2.0)
-        self.bias_method = params.get('bias_method', 'SIMPLE') # 'ORIGINAL', 'SIMPLE', 'SLOPE'
-        self.sl_atr_multiplier = params.get('sl_atr_multiplier', 1.5)
+        # --- Core Parameters ---
+        self.pivot_length = params.get('pivot_length', 14)
+        self.ema_period = params.get('ema_period', 200)
+        self.require_bias = params.get('require_bias', True)
+        self.bias_method = params.get('bias_method', 'SIMPLE') # Keep for compatibility
         
-        # State
+        # --- Risk & Money Management ---
+        self.risk_percent = params.get('risk_percent', 0.5)
+        self.max_risk_usd = params.get('max_risk_usd', 100.0)
+        
+        # --- SL/TP Settings ---
+        self.sl_mode = params.get('sl_mode', 'ATR')
+        self.atr_period = params.get('atr_period', 14)
+        self.sl_atr_multiplier = params.get('sl_atr_multiplier', 1.2)
+        self.swing_buffer_pips = params.get('swing_buffer_pips', 5.0)
+        self.fallback_sl_pips = params.get('fallback_sl_pips', 50)
+        self.min_risk_reward = params.get('min_risk_reward', 1.5)
+        self.fallback_tp_pips = params.get('fallback_tp_pips', 100)
+        
+        # --- Trade Management ---
+        self.use_breakeven = params.get('use_breakeven', True)
+        self.breakeven_trigger_pct = params.get('breakeven_trigger_pct', 50.0)
+        self.breakeven_plus_pips = params.get('breakeven_plus_pips', 2)
+        self.partial_close_pct = params.get('partial_close_pct', 50.0)
+        
+        # --- Strategy Logic ---
+        self.min_pivots_for_bos = params.get('min_pivots_for_bos', 3)
+        self.bos_confirmation_bars = params.get('bos_confirmation_bars', 3)
+        self.require_higher_low = params.get('require_higher_low', True)
+        self.min_bos_break_pips = params.get('min_bos_break_pips', 5.0)
+        self.min_bars_between_trades = params.get('min_bars_between_trades', 5)
+        self.max_daily_trades = params.get('max_daily_trades', 3)
+        self.max_spread_pips = params.get('max_spread_pips', 2.5)
+        self.pip_value = params.get('pip_value', 0.0001)
+        
+        # --- Misc ---
+        self.enable_prints = params.get('enable_prints', True)
+        self.magic_number = params.get('magic_number', 789456)
+        self.trade_comment = params.get('trade_comment', "BOS_Entry")
+
+        # State initialization
         self.swing_highs: List[SwingPoint] = []
         self.swing_lows: List[SwingPoint] = []
         self.bullish_structure = MarketStructure()
         self.bearish_structure = MarketStructure()
         
         self.last_trade_index = -1
+        self.daily_trade_count = 0
+        self.current_day = None
         
-        print(f"LiquidityCatcher Initialized: EMA={self.ema_period}, Pivot={self.pivot_length}, Bias={self.bias_method}")
+        if self.enable_prints:
+            print(f"LiquidityCatcher Initialized: EMA={self.ema_period}, Pivot={self.pivot_length}, Risk={self.risk_percent}%")
 
     def get_name(self) -> str:
         return "Liquidity Catcher Python"
@@ -101,6 +159,19 @@ class LiquidityCatcherStrategy(BaseStrategy):
         current_idx = len(data) - 1
         current_price = data['Close'].iloc[-1]
         current_time = data.index[-1]
+        
+        # Check day change for max daily trades
+        if self.current_day != current_time.date():
+            self.current_day = current_time.date()
+            self.daily_trade_count = 0
+            
+        # Filter: Max Daily Trades
+        if self.daily_trade_count >= self.max_daily_trades:
+            return None
+            
+        # Filter: Min Bars Between Trades
+        if self.last_trade_index != -1 and (current_idx - self.last_trade_index) < self.min_bars_between_trades:
+            return None
         
         # 1. Update Indicators
         ema = data['Close'].ewm(span=self.ema_period, adjust=False).mean()
@@ -251,15 +322,23 @@ class LiquidityCatcherStrategy(BaseStrategy):
                 # But simplified: if we break a significant high.
                 
                 # Check confirmation: Close > Last LH
-                if current_price > last_lower_high:
+            # Check confirmation: Close > Last LH
+                # Apply min break pips filter
+                break_threshold = last_lower_high + (self.min_bos_break_pips * self.pip_value)
+                
+                if current_price > break_threshold:
                     self.bullish_structure.bos_detected = True
                     self.bullish_structure.bos_level = last_lower_high
                     self.bullish_structure.confirmation_bars = 0
-                    # Reset confirmed flag until we get a pullback/confirmation candle
                     self.bullish_structure.bos_confirmed = False
         else:
             self.bullish_structure.confirmation_bars += 1
-            if self.bullish_structure.confirmation_bars > 20: # Timeout
+            if self.bullish_structure.confirmation_bars > self.bos_confirmation_bars:
+                 self.bullish_structure.bos_confirmed = True
+            
+            # Reset if structure fails (handled by reversal logic or simpler timeouts)
+            # For now keeping simple timeout
+            if self.bullish_structure.confirmation_bars > 50: # Timeout hardcoded
                  self.bullish_structure.reset()
 
         # --- Bearish BOS Logic ---
@@ -268,14 +347,20 @@ class LiquidityCatcherStrategy(BaseStrategy):
             if len(self.swing_lows) >= 2:
                 last_higher_low = self.swing_lows[0].price
                 
-                if current_price < last_higher_low:
+            # Check confirmation: Close < Last HL
+                break_threshold = last_higher_low - (self.min_bos_break_pips * self.pip_value)
+                
+                if current_price < break_threshold:
                     self.bearish_structure.bos_detected = True
                     self.bearish_structure.bos_level = last_higher_low
                     self.bearish_structure.confirmation_bars = 0
                     self.bearish_structure.bos_confirmed = False
         else:
             self.bearish_structure.confirmation_bars += 1
-            if self.bearish_structure.confirmation_bars > 20:
+            if self.bearish_structure.confirmation_bars > self.bos_confirmation_bars:
+                self.bearish_structure.bos_confirmed = True
+
+            if self.bearish_structure.confirmation_bars > 50:
                 self.bearish_structure.reset()
 
     def _check_buy_setup(self, data: pd.DataFrame, price: float, time: any) -> Optional[Signal]:
@@ -293,10 +378,12 @@ class LiquidityCatcherStrategy(BaseStrategy):
             return None
             
         # Condition 2: Price > Entry Zone (BOS Level or HL)
-        # Assuming we just need to be above the BOS level to show strength? 
-        # Actually MQL5 says: if(ask < entryZone + minEntryDistance) return;
-        # So it WANTS price to be ABOVE the BOS level (breakout continuation) OR above HL.
         entry_zone = self.bullish_structure.last_higher_low
+        
+        # Logic: Require HL
+        if self.require_higher_low and entry_zone == 0:
+            return None
+            
         if entry_zone == 0: entry_zone = self.bullish_structure.bos_level
         
         if price < entry_zone:
@@ -327,6 +414,8 @@ class LiquidityCatcherStrategy(BaseStrategy):
         # Reset BOS detected to avoid double entry on same setup? MQL5 does strict reset.
         self.bullish_structure.bos_detected = False 
         
+        self.last_trade_index = len(data) - 1
+        
         return Signal(
             signal_type=SignalType.BUY,
             timestamp=time,
@@ -347,6 +436,11 @@ class LiquidityCatcherStrategy(BaseStrategy):
             return None
             
         entry_zone = self.bearish_structure.last_lower_high
+        
+        # Logic: Require LH (Symmetric to HL)
+        if self.require_higher_low and entry_zone == 0:
+            return None
+            
         if entry_zone == 0: entry_zone = self.bearish_structure.bos_level
         
         # Price should be BELOW the entry zone
@@ -372,6 +466,8 @@ class LiquidityCatcherStrategy(BaseStrategy):
             
         self.bearish_structure.bos_detected = False
         
+        self.last_trade_index = len(data) - 1
+        
         return Signal(
             signal_type=SignalType.SELL,
             timestamp=time,
@@ -384,36 +480,56 @@ class LiquidityCatcherStrategy(BaseStrategy):
         Calculate Stop Loss based on Swing level or ATR.
         """
         sl = 0.0
+        pip_v = self.pip_value
         
         # 1. Try Swing Level
-        if ref_level > 0:
+        if self.sl_mode == 'SWING' and ref_level > 0:
+            buffer = self.swing_buffer_pips * pip_v
             if is_buy:
-                sl = ref_level * 0.9995 # Little buffer
+                sl = ref_level - buffer
             else:
-                sl = ref_level * 1.0005
+                sl = ref_level + buffer
                 
-        # 2. Check ATR validity (Safety check) or if ref level invalid
-        # Simple ATR calc
+        # 2. ATR Calculation (used if mode is ATR or SWING invalid)
         high_low = data['High'] - data['Low']
         high_close = (data['High'] - data['Close'].shift()).abs()
         low_close = (data['Low'] - data['Close'].shift()).abs()
         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-        atr = tr.rolling(window=14).mean().iloc[-1]
+        atr_series = tr.rolling(window=self.atr_period).mean()
+        
+        if len(atr_series) > 0:
+            atr = atr_series.iloc[-1]
+        else:
+            atr = 0.0
         
         if atr > 0:
             atr_sl_dist = atr * self.sl_atr_multiplier
             
+            if self.sl_mode == 'ATR' or sl == 0:
+                # Use ATR SL
+                if is_buy:
+                    sl = price - atr_sl_dist
+                else:
+                    sl = price + atr_sl_dist
+            elif self.sl_mode == 'SWING':
+                # Validating Swing SL limits with ATR could be added here
+                # For now, if Swing is chosen and valid, we use it.
+                pass
+
+        # 3. Fallback fixed pips if everything failed
+        if sl == 0:
+            fixed_dist = self.fallback_sl_pips * pip_v
             if is_buy:
-                atr_sl = price - atr_sl_dist
-                # If swing SL is too far or invalid, use ATR
-                if sl == 0 or (price - sl) > (atr_sl_dist * 2): 
-                    sl = atr_sl
-                # Ensure SL is below price
-                sl = min(sl, price - atr_sl_dist * 0.5) 
+                sl = price - fixed_dist
             else:
-                atr_sl = price + atr_sl_dist
-                if sl == 0 or (sl - price) > (atr_sl_dist * 2):
-                    sl = atr_sl
-                sl = max(sl, price + atr_sl_dist * 0.5)
-                
+                sl = price + fixed_dist
+
         return sl
+
+    def on_signal_executed(self, signal: Signal, execution_price: float) -> None:
+        """
+        Callback when signal is executed.
+        """
+        self.daily_trade_count += 1
+        pass
+

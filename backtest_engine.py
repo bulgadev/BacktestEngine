@@ -134,6 +134,7 @@ class BacktestEngine:
         
         # Performance tracking
         self.metrics: Optional[PerformanceMetrics] = None
+        self.data: Optional[pd.DataFrame] = None
     
     def run_backtest(self, strategy: BaseStrategy, data: pd.DataFrame) -> None:
         """
@@ -149,6 +150,9 @@ class BacktestEngine:
         if not strategy.initialized:
             strategy.initialize()
             strategy.initialized = True
+        
+        # Store data for plotting
+        self.data = data
         
         # Reset engine state
         self._reset()
@@ -542,10 +546,11 @@ class BacktestEngine:
             'trades': self.trades,
             'equity_curve': self.equity_curve,
             'timestamps': self.timestamps,
-            'final_capital': self.current_capital
+            'final_capital': self.current_capital,
+            'data': self.data
         }
     
-    def plot_results(self, save_path: str = "backtest_results.html") -> None:
+    def plot_results(self, save_path: str = "backtest_results.html", use_advanced_visualizer: bool = True) -> None:
         """
         This function calls the plot scripts, to well, plots. The arguments is just
         the path to save the html file.
@@ -554,6 +559,13 @@ class BacktestEngine:
             from plotTools.plot_utils import create_dashboard
             results = self.get_results()
             create_dashboard(results, save_path)
+            
+            if use_advanced_visualizer:
+                from plotTools.trade_visualizer import visualize_trades
+                viz_path = save_path.replace(".html", "_trades.html")
+                visualize_trades(self.data, self.trades, viz_path)
+                print(f"Advanced trade visualization saved to: {viz_path}")
+                
         except ImportError as e:
             #Error handling
             print(f"Could not import plotting tools: {e}")

@@ -83,9 +83,11 @@ def main():
     
     opt3 = LiquidityCatcherStrategy(
         ema_period=100,
-        pivot_length=5,
-        bias_method='SIMPLE', # Change to 'SLOPE' or 'ORIGINAL' if needed
-        risk_reward=1.5
+        pivot_length=14,
+        bias_method='SIMPLE', 
+        min_risk_reward=1.5,
+        risk_percent=0.5,
+        sl_mode='ATR'
     )
     
     # Option 1: Simple Moving Average Strategy
@@ -127,7 +129,7 @@ def main():
     # ====================================================================
     # STEP 6: Plot Results
     # ====================================================================
-    engine.plot_results("backtest_results.html")
+    engine.plot_results("backtest_results.html", use_advanced_visualizer=True)
     print("\nPlots saved to backtest_results.html")
     
     # ====================================================================
