@@ -81,14 +81,93 @@ def main():
     fast_period = 10   # Fast MA period (adjust for your timeframe)
     slow_period = 30   # Slow MA period (adjust for your timeframe)
     
-    opt3 = LiquidityCatcherStrategy(
-        ema_period=100,
+    opt_profitable = LiquidityCatcherStrategy(
+        # --- Core ---
         pivot_length=14,
-        bias_method='SIMPLE', 
-        min_risk_reward=1.5,
-        risk_percent=0.5,
-        sl_mode='ATR'
+        ema_period=100,
+        require_bias=True,
+        bias_method='SIMPLE',
+
+        # --- Risk ---
+        risk_percent=0.3,
+        max_risk_usd=100.0,
+
+        # --- SL / TP ---
+        sl_mode='ATR',
+        atr_period=14,
+        sl_atr_multiplier=1.2,
+        swing_buffer_pips=5.0,
+        fallback_sl_pips=25,
+        min_risk_reward=1.3,
+        fallback_tp_pips=100,
+
+        # --- Trade management ---
+        use_breakeven=True,
+        breakeven_trigger_pct=70.0,
+        breakeven_plus_pips=2,
+        partial_close_pct=50.0,
+
+        # --- Structure ---
+        min_pivots_for_bos=3,
+        bos_confirmation_bars=3,
+        require_higher_low=True,
+        min_bos_break_pips=5.0,
+
+        # --- Filters ---
+        min_bars_between_trades=100,
+        max_daily_trades=3,
+        max_spread_pips=2.5,
+
+        # --- Misc ---
+        enable_prints=True,
+        magic_number=789456,
+        trade_comment="LiqSwing",
     )
+
+    opt_newswing = LiquidityCatcherStrategy(
+        # --- Core ---
+        pivot_length=14,
+        ema_period=400,
+        require_bias=True,
+        bias_method='SIMPLE',
+
+        # --- Risk ---
+        risk_percent=0.3,
+        max_risk_usd=1000.0,
+
+        # --- SL / TP ---
+        sl_mode='ATR',
+        atr_period=14,
+        sl_atr_multiplier=0.8,
+        swing_buffer_pips=5.0,
+        fallback_sl_pips=25,
+        min_risk_reward=1.3,
+        fallback_tp_pips=100,
+
+        # --- Trade management ---
+        use_breakeven=True,
+        breakeven_trigger_pct=70.0,
+        breakeven_plus_pips=2,
+        partial_close_pct=0.0,
+
+        # --- Structure ---
+        min_pivots_for_bos=2,
+        bos_confirmation_bars=3,
+        require_higher_low=True,
+        min_bos_break_pips=3.0,
+
+        # --- Filters ---
+        min_bars_between_trades=20,
+        max_daily_trades=10,
+        max_spread_pips=4.0,
+
+        # --- Misc ---
+        enable_prints=True,
+        magic_number=789456,
+        trade_comment="LiqSwing",
+    )
+
+
     
     # Option 1: Simple Moving Average Strategy
     opt1 = SimpleMovingAverageStrategy(
@@ -103,7 +182,7 @@ def main():
         overbought=70.0
     )
 
-    strategy = opt3
+    strategy = opt_profitable
 
     
     # ====================================================================
